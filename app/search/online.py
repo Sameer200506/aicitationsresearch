@@ -70,11 +70,18 @@ def decompose_query(query: str) -> list[str]:
     if len(words_all) <= 8:
         subqueries.append(cleaned_full)
 
-    # 3. Extract formal citations (e.g. 2025 INSC 462, (1998) 8 SCC 1, AIR 1950 SC 124)
+    # 3. Extract formal citations and variations (e.g. (2021) 4 SCC 1 -> 2021 4 SCC 1)
+    unbracketed = re.sub(r'[\(\)\[\]]', ' ', q_clean).strip()
+    unbracketed = re.sub(r'\s+', ' ', unbracketed)
+    if unbracketed != q_clean and len(unbracketed) > 3:
+        subqueries.append(unbracketed)
     parsed = parse_citations(q_clean)
     for p in parsed:
         if p.canonical:
             subqueries.append(p.canonical)
+            clean_canon = re.sub(r'[\(\)\[\]]', ' ', p.canonical).strip()
+            if clean_canon != p.canonical:
+                subqueries.append(clean_canon)
 
     # 4. Extract Appeal / Writ Petition / SLP numbers
     for m in re.finditer(r'((?:Civil Appeal|Criminal Appeal|W\.?P\.?|Writ Petition|S\.?L\.?P\.?|Special Leave Petition|C\.?A\.?)\s*(?:\([A-Za-z]+\))?\s*No\.?\s*\d+\s*(?:of|/)\s*\d+)', q_clean, re.IGNORECASE):
