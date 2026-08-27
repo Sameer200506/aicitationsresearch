@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup, Tag
 from ..citations.parser import extract_citation_strings, parse_citations
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-SEARCH_TIMEOUT = 10.0
+SEARCH_TIMEOUT = 5.0
 _CACHE: dict[str, list[dict[str, Any]]] = {}
 
 
@@ -30,6 +30,10 @@ def _infer_court_and_year(title: str, text: str) -> tuple[str, int | None]:
         court = "Calcutta High Court"
     elif "madras high court" in clow or "madras hc" in clow:
         court = "Madras High Court"
+    elif "karnataka high court" in clow or "karnataka hc" in clow:
+        court = "Karnataka High Court"
+    elif "allahabad high court" in clow or "allahabad hc" in clow:
+        court = "Allahabad High Court"
     elif "high court" in clow:
         court = "High Court"
     elif "tribunal" in clow or "nclat" in clow or "nclt" in clow:
@@ -122,7 +126,7 @@ async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
     headers = dict(BROWSER_HEADERS)
     headers["Referer"] = "https://indiankanoon.org/"
     try:
-        async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
             r = await client.get(
                 "https://indiankanoon.org/search/",
                 params={"formInput": query},
@@ -183,12 +187,12 @@ async def fetch_ddg_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, An
     import urllib.parse
     results: list[dict[str, Any]] = []
     clean_q = re.sub(r'["\']', '', query).strip()
-    search_q = f"site:indiankanoon.org {clean_q}"
+    search_q = f"site:indiankanoon.org/doc/ {clean_q}"
     headers = dict(BROWSER_HEADERS)
     headers["Referer"] = "https://html.duckduckgo.com/"
 
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
             r = await client.post(
                 "https://html.duckduckgo.com/html/",
                 data={"q": search_q},
@@ -213,7 +217,7 @@ async def fetch_ddg_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, An
 
             raw_title = title_el.get_text(separator=" ", strip=True)
             title = re.sub(r"\s*-\s*Indian\s*Kanoon.*$", "", raw_title, flags=re.IGNORECASE).strip()
-            if not title:
+            if not title or len(title) < 3:
                 continue
 
             snippet = snippet_el.get_text(separator=" ", strip=True) if snippet_el else ""
@@ -262,8 +266,8 @@ async def search_online(query: str, top_k: int = 12) -> list[dict[str, Any]]:
 
     subqueries = decompose_query(q_clean)
     
-    # 1. First attempt direct IndianKanoon scrape
-    tasks = [fetch_kanoon_page(sq, top_k=top_k) for sq in subqueries[:4]]
+    # 1. Attempt direct IndianKanoon scrape
+    tasks = [fetch_kanoon_page(sq, top_k=top_k) for sq in subqueries[:3]]
     nested_res = await asyncio.gather(*tasks, return_exceptions=True)
 
     merged: list[dict[str, Any]] = []
