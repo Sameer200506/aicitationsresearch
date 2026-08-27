@@ -148,6 +148,30 @@ async def search_api(
     except Exception:
         pass
 
+    # If online scraping yields 0 results, fall back to seeded database landmark cases
+    if not out:
+        try:
+            db_cases = hybrid_search.search_cases(q, top_k=min(k, 10))
+            for c in db_cases:
+                out.append({
+                    "type": "database",
+                    "source": "database",
+                    "source_name": "Verified Legal Precedents DB",
+                    "case_id": c.get("case_id"),
+                    "case_name": c.get("case_name"),
+                    "short_name": c.get("short_name"),
+                    "court": c.get("court"),
+                    "year": c.get("year"),
+                    "citation": c.get("reported_citation") or c.get("citation"),
+                    "reported_citation": c.get("reported_citation"),
+                    "text": c.get("holding") or c.get("text"),
+                    "url": c.get("source_url") or (f"https://indiankanoon.org/doc/{c.get('case_id')}/" if c.get('case_id') else None),
+                    "score": c.get("final_score", 1.5),
+                    "citations": [c.get("reported_citation")] if c.get("reported_citation") else [],
+                })
+        except Exception:
+            pass
+
     return {"query": q, "mode": mode, "source": "online", "count": len(out[:k]), "results": out[:k]}
 
 

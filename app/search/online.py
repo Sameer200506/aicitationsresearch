@@ -101,11 +101,26 @@ def _extract_doc_id(href: str) -> str | None:
     return m.group(1) if m else None
 
 
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
 async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
-    """Scrape IndianKanoon search results using BeautifulSoup."""
-    # ponytail: uses html.parser (stdlib) to avoid lxml dependency
+    """Scrape IndianKanoon search results directly using BeautifulSoup."""
     results: list[dict[str, Any]] = []
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}
+    headers = dict(BROWSER_HEADERS)
+    headers["Referer"] = "https://indiankanoon.org/"
     try:
         async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT, follow_redirects=True) as client:
             r = await client.get(
@@ -119,7 +134,6 @@ async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
         soup = BeautifulSoup(r.text, "html.parser")
 
         for block in soup.select(".result")[:top_k]:
-            # Title + link
             title_el = block.select_one(".result_title a")
             if not title_el:
                 continue
@@ -133,11 +147,9 @@ async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
                 else f"https://indiankanoon.org{href}"
             )
 
-            # Snippet
             headline_el = block.select_one(".headline")
             snippet = headline_el.get_text(separator=" ", strip=True) if headline_el else ""
 
-            # Court source
             source_el = block.select_one(".docsource")
             docsource = source_el.get_text(strip=True) if source_el else ""
 
@@ -166,6 +178,81 @@ async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
     return results
 
 
+async def fetch_ddg_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
+    """Fallback search using DuckDuckGo IndianKanoon mirror (avoids cloud IP blocks)."""
+    import urllib.parse
+    results: list[dict[str, Any]] = []
+    clean_q = re.sub(r'["\']', '', query).strip()
+    search_q = f"site:indiankanoon.org {clean_q}"
+    headers = dict(BROWSER_HEADERS)
+    headers["Referer"] = "https://html.duckduckgo.com/"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            r = await client.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": search_q},
+                headers=headers,
+            )
+            if r.status_code != 200:
+                r = await client.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": search_q},
+                    headers=headers,
+                )
+            if r.status_code != 200:
+                return results
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        for res in soup.select(".result")[:top_k]:
+            title_el = res.select_one(".result__title a")
+            snippet_el = res.select_one(".result__snippet")
+            url_el = res.select_one(".result__url")
+            if not title_el:
+                continue
+
+            raw_title = title_el.get_text(separator=" ", strip=True)
+            title = re.sub(r"\s*-\s*Indian\s*Kanoon.*$", "", raw_title, flags=re.IGNORECASE).strip()
+            if not title:
+                continue
+
+            snippet = snippet_el.get_text(separator=" ", strip=True) if snippet_el else ""
+            raw_href = title_el.get("href", "")
+            actual_url = ""
+            if "uddg=" in raw_href:
+                m = re.search(r"uddg=([^&]+)", raw_href)
+                if m:
+                    actual_url = urllib.parse.unquote(m.group(1))
+            if not actual_url and url_el:
+                raw_u = url_el.get_text(strip=True)
+                actual_url = "https://" + raw_u if not raw_u.startswith("http") else raw_u
+            if not actual_url:
+                actual_url = raw_href
+
+            doc_id = _extract_doc_id(actual_url)
+            clean_url = f"https://indiankanoon.org/doc/{doc_id}/" if doc_id else actual_url
+            court, year = _infer_court_and_year(title, snippet)
+            cites = extract_citation_strings(f"{title} {snippet}")
+            short_name = title.split(" vs ")[0].split(" v. ")[0].split(" on ")[0].strip()
+
+            results.append({
+                "type": "online",
+                "source_name": "IndianKanoon Live (Mirror)",
+                "case_name": title,
+                "short_name": short_name or title,
+                "court": court,
+                "year": year,
+                "reported_citation": cites[0] if cites else None,
+                "citation": cites[0] if cites else None,
+                "text": snippet or title,
+                "url": clean_url,
+                "citations": cites,
+            })
+    except Exception:
+        pass
+    return results
+
+
 async def search_online(query: str, top_k: int = 12) -> list[dict[str, Any]]:
     q_clean = query.strip()
     if not q_clean:
@@ -174,7 +261,9 @@ async def search_online(query: str, top_k: int = 12) -> list[dict[str, Any]]:
         return _CACHE[q_clean][:top_k]
 
     subqueries = decompose_query(q_clean)
-    tasks = [fetch_kanoon_page(sq, top_k=top_k) for sq in subqueries[:5]]
+    
+    # 1. First attempt direct IndianKanoon scrape
+    tasks = [fetch_kanoon_page(sq, top_k=top_k) for sq in subqueries[:4]]
     nested_res = await asyncio.gather(*tasks, return_exceptions=True)
 
     merged: list[dict[str, Any]] = []
@@ -196,7 +285,27 @@ async def search_online(query: str, top_k: int = 12) -> list[dict[str, Any]]:
             item["final_score"] = round(1.8 - (len(merged) * 0.04), 4)
             merged.append(item)
 
-    _CACHE[q_clean] = merged
+    # 2. If direct search returned 0 (e.g. Cloudflare / datacenter IP block on Render), use DDG mirror
+    if not merged:
+        ddg_tasks = [fetch_ddg_kanoon_page(sq, top_k=top_k) for sq in subqueries[:3]]
+        ddg_nested = await asyncio.gather(*ddg_tasks, return_exceptions=True)
+        for item_list in ddg_nested:
+            if not isinstance(item_list, list):
+                continue
+            for item in item_list:
+                url = item.get("url", "")
+                title_key = re.sub(r"[^a-zA-Z0-9]", "", item.get("case_name", "").lower())[:40]
+                if (url and url in seen_urls) or (title_key and title_key in seen_titles):
+                    continue
+                if url:
+                    seen_urls.add(url)
+                if title_key:
+                    seen_titles.add(title_key)
+                item["final_score"] = round(1.8 - (len(merged) * 0.04), 4)
+                merged.append(item)
+
+    if merged:
+        _CACHE[q_clean] = merged
     return merged[:top_k]
 
 
@@ -295,6 +404,27 @@ Respond ONLY with JSON:
             item_copy = dict(item)
             item_copy["matched_query"] = trigger_query
             merged.append(item_copy)
+
+    # Fallback to DDG mirror if direct scraping returned 0
+    if not merged:
+        ddg_tasks = [fetch_ddg_kanoon_page(q, top_k=6) for q in combined_queries[:4] if q]
+        ddg_nested = await asyncio.gather(*ddg_tasks, return_exceptions=True)
+        for idx, item_list in enumerate(ddg_nested):
+            if not isinstance(item_list, list):
+                continue
+            trigger_query = combined_queries[idx] if idx < len(combined_queries) else ""
+            for item in item_list:
+                url = item.get("url", "")
+                title_key = re.sub(r"[^a-zA-Z0-9]", "", item.get("case_name", "").lower())[:40]
+                if (url and url in seen_urls) or (title_key and title_key in seen_titles):
+                    continue
+                if url:
+                    seen_urls.add(url)
+                if title_key:
+                    seen_titles.add(title_key)
+                item_copy = dict(item)
+                item_copy["matched_query"] = trigger_query
+                merged.append(item_copy)
 
     # Sort and score
     for rank, item in enumerate(merged):
