@@ -1231,36 +1231,47 @@ async function analyzePetition() {
   }
 }
 
-// ── Projects Feature & Modals ──
+// ── Projects Feature & Modals with LocalStorage Backup Sync ──
+function syncProjectsToLocal(projects) {
+  try { localStorage.setItem("legal_ai_projects_cache", JSON.stringify(projects)); } catch(e) {}
+}
+
+function getLocalProjects() {
+  try { return JSON.parse(localStorage.getItem("legal_ai_projects_cache") || "[]"); } catch(e) { return []; }
+}
+
 async function loadProjects() {
   const container = $("projects-grid");
   container.innerHTML = '<div class="card muted"><span class="spinner"></span>Loading projects…</div>';
   try {
     const data = await api("/api/v1/projects");
     window._projectsCache = data.projects || [];
-    if (!window._projectsCache.length) {
-      container.innerHTML = `
-        <div class="card" style="grid-column: 1/-1;text-align:center;padding:36px;">
-          <p style="font-size:16px;font-weight:600;margin-bottom:6px">No Projects Created Yet</p>
-          <p class="muted" style="margin-bottom:16px">Create a project to organize citations from search and research sessions.</p>
-          <button class="btn-primary" onclick="openNewProjectModal()">➕ Create First Project</button>
-        </div>
-      `;
-      return;
-    }
-    container.innerHTML = window._projectsCache.map(p => `
-      <div class="project-card" onclick="openProjectDetail('${p.project_id}')">
-        <h4>📁 ${esc(p.name)}</h4>
-        <p>${esc(p.description || "No description provided.")}</p>
-        <div class="project-card-footer">
-          <span class="badge b-blue">${p.citations_count || 0} citations</span>
-          <span>${new Date(p.created_at).toLocaleDateString()}</span>
-        </div>
-      </div>
-    `).join("");
+    syncProjectsToLocal(window._projectsCache);
   } catch (e) {
-    container.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+    // Fallback to local cache if offline
+    window._projectsCache = getLocalProjects();
   }
+
+  if (!window._projectsCache.length) {
+    container.innerHTML = `
+      <div class="card" style="grid-column: 1/-1;text-align:center;padding:36px;">
+        <p style="font-size:16px;font-weight:600;margin-bottom:6px">No Projects Created Yet</p>
+        <p class="muted" style="margin-bottom:16px">Create a project to organize citations from search and research sessions.</p>
+        <button class="btn-primary" onclick="openNewProjectModal()">➕ Create First Project</button>
+      </div>
+    `;
+    return;
+  }
+  container.innerHTML = window._projectsCache.map(p => `
+    <div class="project-card" onclick="openProjectDetail('${p.project_id}')">
+      <h4>📁 ${esc(p.name)}</h4>
+      <p>${esc(p.description || "No description provided.")}</p>
+      <div class="project-card-footer">
+        <span class="badge b-blue">${p.citations_count || 0} citations</span>
+        <span>${new Date(p.created_at).toLocaleDateString()}</span>
+      </div>
+    </div>
+  `).join("");
 }
 
 async function loadProjectsDropdown() {
