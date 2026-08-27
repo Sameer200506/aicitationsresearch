@@ -57,19 +57,78 @@ class ResearchCoordinator:
                     "text": oh.get("text", "")[:500],
                     "holding": oh.get("text", "")[:300],
                 })
-                # If the title/text refers to an Act/Section, surface it as a statute hit
-                title_low = oh.get("case_name", "").lower()
-                if "section" in title_low or "act" in title_low or "article" in title_low:
-                    statute_hits.append({
-                        "statute_id": f"stat_{idx}",
-                        "act": oh.get("case_name", "")[:60],
-                        "section": "",
-                        "title": oh.get("case_name", "")[:80],
-                        "body": oh.get("text", "")[:300],
-                        "score": 1.5,
-                    })
         except Exception:
             pass
+
+        # Fallback to local DB if online hits are empty
+        if not case_hits:
+            try:
+                db_cases = self.search.search_cases(query, top_k=8)
+                for c in db_cases:
+                    case_hits.append({
+                        "case_id": c.get("case_id"),
+                        "case_name": c.get("case_name"),
+                        "short_name": c.get("short_name"),
+                        "court": c.get("court"),
+                        "year": c.get("year"),
+                        "reported_citation": c.get("reported_citation") or c.get("citation"),
+                        "neutral_citation": None,
+                        "topics": ["precedent"],
+                        "holding": c.get("holding", "")[:400],
+                        "snippet": c.get("holding", "")[:400],
+                        "score": c.get("final_score", 1.5),
+                        "url": c.get("source_url") or (f"https://indiankanoon.org/doc/{c.get('case_id')}/" if c.get('case_id') else None),
+                        "source": "database",
+                    })
+                    paragraphs.append({
+                        "case_id": c.get("case_id"),
+                        "case_name": c.get("case_name"),
+                        "citation": c.get("reported_citation"),
+                        "year": c.get("year"),
+                        "text": c.get("holding", "")[:500],
+                        "holding": (c.get("holding") or "")[:300],
+                    })
+            except Exception:
+                pass
+
+        # Fallback to AI legal precedent engine if hits are still empty
+        if not case_hits and self.llm and self.llm.available():
+            import urllib.parse
+            system = """You are an Indian Legal Research Intelligence Agent.
+When given a query, return 4 to 6 relevant Indian Supreme Court / High Court precedent judgments and citations.
+Respond ONLY with JSON:
+{"results": [{"case_name": "...", "court": "...", "year": 2023, "citation": "...", "holding": "...", "search_query": "..."}]}"""
+            try:
+                ai_data = await self.llm.json_chat(system, query, temperature=0.1)
+                for idx, r in enumerate(ai_data.get("results", [])):
+                    c_id = f"ai_pipeline_{idx}"
+                    sq = r.get("search_query") or r.get("case_name", query)
+                    k_url = f"https://indiankanoon.org/search/?formInput={urllib.parse.quote(sq)}"
+                    case_hits.append({
+                        "case_id": c_id,
+                        "case_name": r.get("case_name"),
+                        "short_name": r.get("case_name", "").split(" v.")[0].split(" vs")[0].strip(),
+                        "court": r.get("court"),
+                        "year": r.get("year"),
+                        "reported_citation": r.get("citation"),
+                        "neutral_citation": None,
+                        "topics": ["ai_precedent"],
+                        "holding": r.get("holding", "")[:400],
+                        "snippet": r.get("holding", "")[:400],
+                        "score": 1.7,
+                        "url": k_url,
+                        "source": "ai_precedent",
+                    })
+                    paragraphs.append({
+                        "case_id": c_id,
+                        "case_name": r.get("case_name"),
+                        "citation": r.get("citation"),
+                        "year": r.get("year"),
+                        "text": r.get("holding", "")[:500],
+                        "holding": r.get("holding", "")[:300],
+                    })
+            except Exception:
+                pass
 
         return {
             "query": query,

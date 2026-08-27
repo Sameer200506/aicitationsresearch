@@ -432,6 +432,41 @@ Respond ONLY with JSON:
                 item_copy["matched_query"] = trigger_query
                 merged.append(item_copy)
 
+    # Fallback to AI legal precedent engine if scrapers returned 0
+    if not merged and llm and llm.available():
+        import urllib.parse
+        system = """You are an Indian Legal Research Intelligence Agent.
+Given the legal issues and statutes in this document, return 4 to 8 authoritative Indian Supreme Court or High Court precedent judgments with formal citations and ratio decidendi.
+Respond ONLY with JSON:
+{
+  "results": [
+    {"case_name": "Full Title", "court": "Court", "year": 2023, "citation": "SCC / AIR cite", "holding": "Legal proposition", "search_query": "search query"}
+  ]
+}"""
+        try:
+            issues_summary = "\n".join([f"- {i}" for i in analysis.get("legal_issues", [])]) or analysis.get("summary", text_clean[:500])
+            ai_data = await llm.json_chat(system, f"Document Summary: {analysis.get('summary')}\nLegal Issues:\n{issues_summary}", temperature=0.1)
+            for idx, r in enumerate(ai_data.get("results", [])):
+                sq = r.get("search_query") or r.get("case_name", "")
+                k_url = f"https://indiankanoon.org/search/?formInput={urllib.parse.quote(sq)}"
+                c_cite = r.get("citation")
+                merged.append({
+                    "type": "ai_precedent",
+                    "source_name": "AI Legal Authority",
+                    "case_name": r.get("case_name", "Landmark Precedent"),
+                    "short_name": r.get("case_name", "").split(" v.")[0].split(" vs")[0].strip(),
+                    "court": r.get("court", "Supreme Court of India"),
+                    "year": r.get("year"),
+                    "reported_citation": c_cite,
+                    "citation": c_cite,
+                    "text": r.get("holding", ""),
+                    "url": k_url,
+                    "matched_query": "AI Precedent Inference",
+                    "citations": [c_cite] if c_cite else [],
+                })
+        except Exception:
+            pass
+
     # Sort and score
     for rank, item in enumerate(merged):
         item["score"] = round(2.0 - (rank * 0.03), 3)
