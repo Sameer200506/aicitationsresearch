@@ -1,3 +1,6 @@
+import asyncio
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -16,7 +19,34 @@ from .llm import OpenRouterClient, get_llm
 from .search.hybrid import HybridSearch
 from .search.online import analyze_document_and_search, search_online
 
-app = FastAPI(title="AI Legal Research & Citation Intelligence", version="0.1.0")
+
+async def _keep_alive_task():
+    """Periodically ping /healthz to prevent cloud providers (like Render) from sleeping after 15m."""
+    # Render sets RENDER_EXTERNAL_URL automatically (e.g. https://yourapp.onrender.com)
+    url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("SELF_PING_URL")
+    if not url:
+        return
+    endpoint = f"{url.rstrip('/')}/healthz"
+    # Delay initial ping by 3 minutes
+    await asyncio.sleep(180)
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                await client.get(endpoint)
+        except Exception:
+            pass
+        # Ping every 10 minutes (600s) - well below Render's 15m idle threshold
+        await asyncio.sleep(600)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_keep_alive_task())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="AI Legal Research & Citation Intelligence", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
