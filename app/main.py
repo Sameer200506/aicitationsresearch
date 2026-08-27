@@ -172,6 +172,49 @@ async def search_api(
         except Exception:
             pass
 
+    # If still 0 results and LLM is enabled, invoke AI Precedent Intelligence fallback
+    if not out and llm.available():
+        import urllib.parse
+        system = """You are an Indian Legal Research Intelligence Agent.
+When given a case title, legal issue, or statute, return 4 to 8 relevant Indian Supreme Court, High Court, or Tribunal precedent judgments with formal citations and ratio decidendi.
+Respond ONLY with JSON:
+{
+  "results": [
+    {
+      "case_name": "Full Case Title (e.g. K. Gopi v. The Sub-Registrar & Ors.)",
+      "court": "Madras High Court / Supreme Court of India / etc.",
+      "year": 2023,
+      "citation": "2023 SCC OnLine Mad 1234 or (2021) 4 SCC 1",
+      "holding": "Key legal proposition, ratio decidendi, and judgment summary...",
+      "search_query": "K Gopi Sub Registrar"
+    }
+  ]
+}"""
+        try:
+            ai_data = await llm.json_chat(system, q, temperature=0.1)
+            for idx, r in enumerate(ai_data.get("results", [])):
+                search_term = r.get("search_query") or r.get("case_name", q)
+                kanoon_link = f"https://indiankanoon.org/search/?formInput={urllib.parse.quote(search_term)}"
+                c_cite = r.get("citation")
+                out.append({
+                    "type": "ai_precedent",
+                    "source": "ai_precedent",
+                    "source_name": "AI Legal Precedent Engine",
+                    "case_id": f"ai_{idx}_{abs(hash(r.get('case_name', '')))}",
+                    "case_name": r.get("case_name", "Precedent"),
+                    "short_name": r.get("case_name", "").split(" v.")[0].split(" vs")[0].strip() or r.get("case_name"),
+                    "court": r.get("court", "Indian Courts"),
+                    "year": r.get("year"),
+                    "citation": c_cite,
+                    "reported_citation": c_cite,
+                    "text": r.get("holding", ""),
+                    "url": kanoon_link,
+                    "score": round(1.9 - (idx * 0.05), 3),
+                    "citations": [c_cite] if c_cite else [],
+                })
+        except Exception:
+            pass
+
     return {"query": q, "mode": mode, "source": "online", "count": len(out[:k]), "results": out[:k]}
 
 

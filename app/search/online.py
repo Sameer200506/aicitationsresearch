@@ -49,16 +49,26 @@ def decompose_query(query: str) -> list[str]:
     if not q_clean:
         return []
 
-    # 1. Full raw query if reasonably concise
-    words_all = q_clean.split()
-    if len(words_all) <= 8:
-        subqueries.append(q_clean)
+    # 1. Cleaned query without legal boilerplates (& Ors, & Anr, and Others, etc.)
+    cleaned_full = re.sub(r'\b(?:&|and)\s+(?:ors|anr|others|another|etc)\b\.?', '', q_clean, flags=re.IGNORECASE).strip()
+    cleaned_full = re.sub(r'\s+', ' ', cleaned_full)
 
-    # 2. Extract case names (e.g. Party v. Party / Party vs Party)
-    for m in re.finditer(r'([A-Z0-9][A-Za-z0-9\.\s\-\'\\\&]+?\s+(?:v\.|vs\.?|versus)\s+[A-Z0-9][A-Za-z0-9\.\s\-\'\\\&]+?)(?:,|$|—|\n|\()', q_clean, re.IGNORECASE):
-        cname = m.group(1).strip()
-        if len(cname.split()) >= 2 and len(cname) < 90:
-            subqueries.append(cname)
+    # 2. Extract Party vs Party relationships (e.g., K. Gopi v. Sub-Registrar)
+    case_match = re.search(r'([A-Za-z0-9\.\s]+?)\s+(?:v\.|vs\.?|versus)\s+([A-Za-z0-9\.\s\-]+)', cleaned_full, re.IGNORECASE)
+    if case_match:
+        p1 = case_match.group(1).strip()
+        p2 = re.sub(r'^(?:The|State of|Union of India)\s+', '', case_match.group(2).strip(), flags=re.IGNORECASE).strip()
+        if p1 and p2:
+            subqueries.append(f"{p1} {p2}")
+            subqueries.append(f"{p1} vs {p2}")
+            p1_words = [w for w in p1.split() if len(w) > 1]
+            p2_words = [w for w in p2.split() if len(w) > 2 and w.lower() not in {"the", "and", "for", "rep", "state", "district", "ors", "anr"}]
+            if p1_words and p2_words:
+                subqueries.append(f"{' '.join(p1_words)} {' '.join(p2_words)}")
+
+    words_all = cleaned_full.split()
+    if len(words_all) <= 8:
+        subqueries.append(cleaned_full)
 
     # 3. Extract formal citations (e.g. 2025 INSC 462, (1998) 8 SCC 1, AIR 1950 SC 124)
     parsed = parse_citations(q_clean)
@@ -66,7 +76,7 @@ def decompose_query(query: str) -> list[str]:
         if p.canonical:
             subqueries.append(p.canonical)
 
-    # 4. Extract Appeal / Writ Petition / SLP numbers (e.g. Civil Appeal No. 3954 of 2025, W.P. No. 33955 of 2021)
+    # 4. Extract Appeal / Writ Petition / SLP numbers
     for m in re.finditer(r'((?:Civil Appeal|Criminal Appeal|W\.?P\.?|Writ Petition|S\.?L\.?P\.?|Special Leave Petition|C\.?A\.?)\s*(?:\([A-Za-z]+\))?\s*No\.?\s*\d+\s*(?:of|/)\s*\d+)', q_clean, re.IGNORECASE):
         subqueries.append(m.group(1).strip())
 
@@ -74,20 +84,12 @@ def decompose_query(query: str) -> list[str]:
     for m in re.finditer(r'((?:Section|Sec\.|Article|Art\.|Rule|Order)\s*\d+[A-Za-z0-9\(\)]*(?:\s+[A-Za-z]+){0,4}(?:\s+Act|\s+Rules|\s+Code|\s+CrPC|\s+IPC|\s+CPC|\s+BNSS|\s+BNS)?)', q_clean, re.IGNORECASE):
         subqueries.append(m.group(1).strip())
 
-    # 6. Split by clauses (em-dash, hyphen, semicolon)
-    for part in re.split(r'[—–;]', q_clean):
-        part_clean = re.sub(r'^(?:whether|regarding|effect of|issue of|challenging)\s+', '', part.strip(), flags=re.IGNORECASE).strip()
-        words = [w for w in re.findall(r'[A-Za-z0-9]{3,}', part_clean) if w.lower() not in {"the", "and", "for", "with", "from", "that", "this", "can", "may"}]
-        if 2 <= len(words) <= 7:
-            subqueries.append(" ".join(words))
-
-    # 7. Fallback keywords
-    stop_words = {"the", "and", "for", "with", "from", "that", "this", "can", "may", "whether", "refusal", "effect", "decided", "under", "because"}
-    key_words = [w for w in re.findall(r'[A-Za-z0-9]{3,}', q_clean) if w.lower() not in stop_words]
+    # 6. Fallback keywords
+    stop_words = {"the", "and", "for", "with", "from", "that", "this", "can", "may", "whether", "refusal", "effect", "decided", "under", "because", "ors", "anr", "others", "another"}
+    key_words = [w for w in re.findall(r'[A-Za-z0-9]{3,}', cleaned_full) if w.lower() not in stop_words]
     if len(key_words) >= 3:
-        subqueries.append(" ".join(key_words[:6]))
+        subqueries.append(" ".join(key_words[:5]))
 
-    # Deduplicate preserving order
     seen = set()
     final: list[str] = []
     for sq in subqueries:
@@ -96,7 +98,7 @@ def decompose_query(query: str) -> list[str]:
             seen.add(norm.lower())
             final.append(norm)
 
-    return final or [q_clean]
+    return final or [cleaned_full or q_clean]
 
 
 def _extract_doc_id(href: str) -> str | None:
