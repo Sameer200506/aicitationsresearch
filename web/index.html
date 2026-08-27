@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>AI Legal Research &amp; Citation Intelligence</title>
+<meta name="description" content="AI-powered Indian legal research platform with citation intelligence, document analyzer, and case project notebooks."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── shadcn/ui Inspired Design System ── */
+:root {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card: #121215;
+  --card-foreground: #f4f4f5;
+  --popover: #18181b;
+  --popover-foreground: #f4f4f5;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #f4f4f5;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --border: #27272a;
+  --border-hover: #3f3f46;
+  --input: #18181b;
+  --ring: #3b82f6;
+  --radius: 10px;
+  --sidebar-width: 260px;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
+  --purple: #a855f7;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+/* ── App Shell Layout ── */
+.app-container {
+  display: flex;
+  width: 100vw;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ── Sidebar (shadcn style) ── */
+aside.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  z-index: 40;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s;
+}
+
+aside.sidebar.collapsed {
+  transform: translateX(-100%);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.sidebar-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #18181b;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.sidebar-title h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+.sidebar-title p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.sidebar-close-btn {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted-foreground);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+nav.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  overflow-y: auto;
+}
+.nav-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 8px 10px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+nav.sidebar-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted-foreground);
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+nav.sidebar-nav button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+nav.sidebar-nav button.active {
+  background: #27272a;
+  color: var(--primary);
+  font-weight: 600;
+  border-color: #3f3f46;
+}
+nav.sidebar-nav button .nav-icon {
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+}
+
+.sidebar-footer {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Main Content Area ── */
+.main-wrapper {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  width: calc(100vw - var(--sidebar-width));
+}
+
+.main-wrapper.expanded {
+  margin-left: 0;
+  width: 100vw;
+}
+
+/* ── Top Navbar ── */
+header.topbar {
+  height: 56px;
+  background: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  gap: 14px;
+}
+
+.toggle-sidebar-btn {
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 15px;
+  transition: background 0.15s;
+}
+.toggle-sidebar-btn:hover {
+  background: #3f3f46;
+}
+
+.topbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#status {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: #18181b;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  display: inline-block;
+}
+#status.on {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.25);
+  background: rgba(74, 222, 128, 0.05);
+}
+#status.on::before {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+}
+
+/* ── Content Viewport ── */
+main.content-area {
+  flex: 1;
+  padding: 28px 32px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── shadcn Cards / Panels ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.card-header {
+  margin-bottom: 14px;
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+.card-description {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  margin-top: 3px;
+}
+
+/* ── Form Controls (Inputs, Buttons) ── */
+input[type="text"], textarea, select {
+  width: 100%;
+  background: var(--input);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+textarea { min-height: 120px; resize: vertical; }
+
+input[type="file"] {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+input[type="file"]::file-selector-button {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 14px;
+  margin-right: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+input[type="file"]::file-selector-button:hover {
+  background: #3f3f46;
+}
+
+button.btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid transparent;
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+button.btn-primary:hover {
+  background: #e4e4e7;
+}
+button.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+button.btn-secondary {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+button.btn-secondary:hover {
+  background: #3f3f46;
+}
+
+button.btn-outline {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+button.btn-outline:hover {
+  background: var(--secondary);
+}
+
+button.btn-destructive {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.btn-destructive:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.row > *:last-child {
+  flex-shrink: 0;
+}
+
+/* ── Segmented Control Switcher (Tabs) ── */
+.segmented-switch {
+  display: inline-flex;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 3px;
+  margin-bottom: 16px;
+}
+.segmented-switch button {
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  padding: 6px 14px;
+  border-radius: calc(var(--radius) - 3px);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.segmented-switch button.active {
+  background: var(--secondary);
+  color: var(--foreground);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  color: var(--muted-foreground);
+}
+.b-green { color: #4ade80; background: rgba(74, 222, 128, 0.08); border-color: rgba(74, 222, 128, 0.2); }
+.b-yellow { color: #fbbf24; background: rgba(251, 191, 36, 0.08); border-color: rgba(251, 191, 36, 0.2); }
+.b-red { color: #f87171; background: rgba(248, 113, 113, 0.08); border-color: rgba(248, 113, 113, 0.2); }
+.b-purple { color: #c084fc; background: rgba(192, 132, 252, 0.08); border-color: rgba(192, 132, 252, 0.2); }
+.b-blue { color: #60a5fa; background: rgba(96, 165, 250, 0.08); border-color: rgba(96, 165, 250, 0.2); }
+
+/* ── Citation Cards ── */
+.result-item {
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.result-item:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.result-item-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.result-item h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--foreground);
+  line-height: 1.4;
+}
+.result-item p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+.tagline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.save-to-project-btn {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.save-to-project-btn:hover {
+  background: #3f3f46;
+  border-color: var(--border-hover);
+}
+
+/* ── Project Cards ── */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.project-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+.project-card:hover {
+  border-color: var(--ring);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.project-card h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+  margin-bottom: 4px;
+}
+.project-card p {
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  flex: 1;
+  margin-bottom: 12px;
+}
+.project-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+/* ── Memo / Research view ── */
+.memo { line-height: 1.7; font-size: 14px; }
+.memo h1 { font-size: 18px; margin: 16px 0 8px; font-weight: 600; color: var(--foreground); }
+.memo h2 { font-size: 15px; margin: 14px 0 6px; font-weight: 600; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.memo ul { margin: 8px 0 8px 20px; }
+.memo li { margin: 4px 0; }
+.memo code { background: #27272a; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12.5px; }
+
+/* ── Modal Dialogs ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal-dialog {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 600px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: dialogIn 0.2s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+@keyframes dialogIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+.modal-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.modal-dialog-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.btn-close-modal {
+  background: none;
+  border: none;
+  color: var(--muted-foreground);
+  font-size: 18px;
+  cursor: pointer;
+}
+.btn-close-modal:hover { color: var(--foreground); }
+
+/* ── Toast Notification ── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #18181b;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 60;
+  display: none;
+  animation: toastIn 0.25s ease-out;
+}
+@keyframes toastIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ── Utilities ── */
+.hidden { display: none !important; }
+.muted { color: var(--muted-foreground); }
+.warn {
+  border-left: 3px solid var(--warning);
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 0 8px 8px 0;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--muted-foreground);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive Mobile Styles ── */
+@media (max-width: 768px) {
+  aside.sidebar {
+    transform: translateX(-100%);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6);
+  }
+  aside.sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-close-btn {
+    display: block;
+  }
+  .main-wrapper {
+    margin-left: 0;
+    width: 100vw;
+  }
+  header.topbar {
+    padding: 0 16px;
+  }
+  main.content-area {
+    padding: 18px 14px;
+  }
+  .row {
+    flex-direction: column;
+  }
+  .row > *:last-child {
+    width: 100%;
+  }
+  .segmented-switch {
+    width: 100%;
+    display: flex;
+  }
+  .segmented-switch button {
+    flex: 1;
+    text-align: center;
+  }
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ── Left Sidebar ── -->
+  <aside class="sidebar" id="app-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">⚖️</div>
+      <div class="sidebar-title">
+        <h2>Legal Citation</h2>
+        <p>Intelligence Suite</p>
+      </div>
+      <button class="sidebar-close-btn" onclick="toggleSidebar()">✕</button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-group-label">Research Workspace</span>
+      <button data-tab="search" class="active" onclick="switchTab('search')">
+        <span class="nav-icon">🔍</span>
+        <span>Legal Search</span>
+      </button>
+      <button data-tab="research" onclick="switchTab('research')">
+        <span class="nav-icon">📚</span>
+        <span>Research Pipeline</span>
+      </button>
+      <button data-tab="petition" onclick="switchTab('petition')">
+        <span class="nav-icon">📄</span>
+        <span>Petition Analyzer</span>
+      </button>
+
+      <span class="nav-group-label" style="margin-top: 12px;">Case Management</span>
+      <button data-tab="projects" onclick="switchTab('projects')">
+        <span class="nav-icon">📁</span>
+        <span>Projects &amp; Citations</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-secondary" style="width:100%;justify-content:center;" onclick="openNewProjectModal()">
+        ➕ New Project
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main Area ── -->
+  <div class="main-wrapper" id="main-wrapper">
+    <header class="topbar">
+      <button class="toggle-sidebar-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
+        ☰
+      </button>
+      <div class="topbar-title" id="current-tab-title">Legal Search</div>
+
+      <div class="topbar-right">
+        <div id="status">checking LLM…</div>
+      </div>
+    </header>
+
+    <main class="content-area">
+
+      <!-- ── TAB 1: LEGAL SEARCH ── -->
+      <section id="tab-search">
+        <div class="card">
+          <div class="segmented-switch">
+            <button id="search-mode-text" class="active" onclick="setSearchMode('text')">🔍 Keyword Search</button>
+            <button id="search-mode-doc" onclick="setSearchMode('doc')">📄 AI Document Search</button>
+          </div>
+
+          <!-- Keyword Search Form -->
+          <div id="search-mode-text-container">
+            <div class="row">
+              <input type="text" id="search-q" placeholder='Search case, statute, or legal issue (e.g. "anticipatory bail 438", "cancellation of gift deed", "moratorium IBC")' onkeydown="if(event.key==='Enter')doSearch()"/>
+              <button class="btn-primary" id="search-text-btn" onclick="doSearch()">🌐 Live Search</button>
+            </div>
+            <p class="card-description" style="margin-top: 10px;">Scrapes live Indian Supreme Court, High Courts, and Tribunal judgments with citation extraction &amp; direct judgment links.</p>
+          </div>
+
+          <!-- AI Document Upload Form -->
+          <div id="search-mode-doc-container" class="hidden">
+            <label class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Upload Legal File (.pdf / .txt) or Paste Text</label>
+            <div class="row" style="margin-top:8px">
+              <input type="file" id="search-doc-file" accept=".pdf,.txt" style="flex:1"/>
+              <button class="btn-primary" id="search-doc-btn" onclick="doDocumentSearch()">⚡ AI Analyze &amp; Scrape Citations</button>
+            </div>
+            <textarea id="search-doc-text" placeholder="…or paste legal document / deed / petition / order text here" style="margin-top:12px;min-height:90px"></textarea>
+            <p class="card-description" style="margin-top: 10px;">AI decomposes legal issues, extracts statutes, formulates targeted queries, and retrieves verified citations automatically.</p>
+          </div>
+        </div>
+
+        <div id="search-results"></div>
+      </section>
+
+      <!-- ── TAB 2: RESEARCH WORKSPACE ── -->
+      <section id="tab-research" class="hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Multi-Agent Legal Research Pipeline</h3>
+            <p class="card-description">Pipeline: issue decomposition → statute search → hybrid retrieval → authority ranking → counter-authorities → citation verification → verified memo.</p>
+          </div>
+          <div class="row">
+            <input type="text" id="research-q" placeholder="Can a writ petition be maintained when an alternative statutory remedy exists?" onkeydown="if(event.key==='Enter')doResearch()"/>
+            <button class="btn-primary" id="research-btn" onclick="doResearch()">Run Research Agents</button>
+          </div>
+        </div>
+        <div id="research-out"></div>
+      </section>
+
+      <!-- ── TAB 3: PETITION ANALYZER ── -->
+      <section id="tab-petition" class="hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Petition &amp; Brief Citation Analyzer</h3>
+            <p class="card-description">Extracts facts, issues, reliefs &amp; citations → verifies citations → flags missing/unsupported authorities → recommends stronger Supreme Court precedents.</p>
+          </div>
+          <div class="row">
+            <input type="file" id="petition-file" accept=".pdf,.txt" style="flex:1"/>
+            <button class="btn-primary" id="petition-btn" onclick="analyzePetition()">Analyze Petition</button>
+          </div>
+          <textarea id="petition-text" placeholder="…or paste petition or application text here" style="margin-top:12px;min-height:110px"></textarea>
+        </div>
+        <div id="petition-out"></div>
+      </section>
+
+      <!-- ── TAB 4: PROJECTS WORKSPACE ── -->
+      <section id="tab-projects" class="hidden">
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h3 class="card-title">Projects &amp; Saved Case Books</h3>
+            <p class="card-description">Organize scraped citations, precedents, and research findings into dedicated project folders.</p>
+          </div>
+          <button class="btn-primary" onclick="openNewProjectModal()">➕ Create Project</button>
+        </div>
+
+        <!-- Project Detail View Container -->
+        <div id="project-detail-container" class="hidden">
+          <div class="card" style="border-color:var(--border-hover);">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+              <div>
+                <button class="btn-outline" style="margin-bottom:8px" onclick="closeProjectDetail()">← Back to All Projects</button>
+                <h2 id="proj-detail-name" style="font-size:18px;font-weight:700">Project Name</h2>
+                <p id="proj-detail-desc" class="muted" style="font-size:13px">Description</p>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn-secondary" onclick="copyProjectCitations()">📋 Copy Citations</button>
+                <button class="btn-destructive" onclick="deleteCurrentProject()">🗑️ Delete Project</button>
+              </div>
+            </div>
+            <div id="proj-citations-list" style="margin-top:16px;"></div>
+          </div>
+        </div>
+
+        <!-- Projects Grid -->
+        <div id="projects-grid-container">
+          <div class="projects-grid" id="projects-grid">
+            <div class="card muted">Loading projects…</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ── MODAL: SAVE CITATION TO PROJECT ── -->
+<div class="modal-overlay" id="save-modal" onclick="if(event.target===this)closeSaveModal()">
+  <div class="modal-dialog">
+    <div class="modal-dialog-header">
+      <h3>🔖 Save Citation to Project</h3>
+      <button class="btn-close-modal" onclick="closeSaveModal()">✕</button>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <p style="font-size:12px" class="muted">Citation to Save:</p>
+      <p id="save-case-title" style="font-weight:600;font-size:14px;margin-top:2px;">Case Title</p>
+      <p id="save-case-cite" class="muted" style="font-size:12px;">Citation / Court</p>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600" class="muted">Select Target Project:</label>
+      <select id="save-project-select" style="margin-top:6px;">
+        <option value="">Loading projects…</option>
+      </select>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;font-weight:600" class="muted">Optional Notes / Key Ratio:</label>
+      <input type="text" id="save-citation-notes" placeholder="e.g. Leading authority for gift deed revocation limitation" style="margin-top:6px;"/>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <button class="btn-outline" onclick="openNewProjectModal()">➕ Create New Project</button>
+      <button class="btn-primary" onclick="confirmSaveCitation()">Save Citation</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: CREATE NEW PROJECT ── -->
+<div class="modal-overlay" id="new-project-modal" onclick="if(event.target===this)closeNewProjectModal()">
+  <div class="modal-dialog">
+    <div class="modal-dialog-header">
+      <h3>📁 Create New Project</h3>
+      <button class="btn-close-modal" onclick="closeNewProjectModal()">✕</button>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600" class="muted">Project Name *</label>
+      <input type="text" id="new-proj-name" placeholder="e.g. Special Leave Petition - Property Dispute" style="margin-top:6px;"/>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <label style="font-size:12px;font-weight:600" class="muted">Description / Case Details</label>
+      <textarea id="new-proj-desc" placeholder="Brief notes on case facts, client, or legal questions..." style="margin-top:6px;min-height:80px;"></textarea>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn-outline" onclick="closeNewProjectModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitCreateProject()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST NOTIFICATION ── -->
+<div id="toast">Citation saved to project!</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const BADGE = {
+  "VERIFIED": ["b-green", "🟢 VERIFIED"],
+  "PARTIALLY_VERIFIED": ["b-yellow", "🟡 PARTIAL"],
+  "NOT_FOUND": ["b-red", "🔴 NOT FOUND"],
+  "POTENTIALLY_MISUSED": ["b-red", "⚠️ MISUSED?"],
+  "VERIFIED_BUT_OVERRULED": ["b-red", "🔴 OVERRULED"]
+};
+
+// ── Global State ──
+window._currentPendingCitation = null;
+window._activeProjectId = null;
+window._projectsCache = [];
+
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  setTimeout(() => { t.style.display = "none"; }, 3000);
+}
+
+// ── Markdown Parser Helper ──
+function md(t) {
+  let s = esc(t);
+  s = s.replace(/^###### (.*)$/gm, "<h6>$1</h6>").replace(/^##### (.*)$/gm, "<h5>$1</h5>")
+       .replace(/^### (.*)$/gm, "<h3>$1</h3>").replace(/^## (.*)$/gm, "<h2>$1</h2>").replace(/^# (.*)$/gm, "<h1>$1</h1>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|\s)\*([^*\n]+)\*/g, "$1<em>$2</em>")
+       .replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/^\s*[-*] (.*)$/gm, "<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, "<ul>$1</ul>");
+  s = s.split(/\n{2,}/).map(b => /^<(h\d|ul|li)/.test(b.trim()) ? b : `<p>${b.replace(/\n/g, "<br>")}</p>`).join("");
+  return s;
+}
+
+// ── API Fetch Helper ──
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    let m;
+    try { m = (await r.json()).detail; } catch (e) { m = r.statusText; }
+    throw new Error(m);
+  }
+  return r.json();
+}
+
+// ── Sidebar Toggle & Navigation ──
+function toggleSidebar() {
+  const sb = $("app-sidebar");
+  const mw = $("main-wrapper");
+  if (window.innerWidth <= 768) {
+    sb.classList.toggle("open");
+  } else {
+    sb.classList.toggle("collapsed");
+    mw.classList.toggle("expanded");
+  }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll(".sidebar-nav button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === tabId);
+  });
+  document.querySelectorAll("main section").forEach(s => s.classList.add("hidden"));
+  const target = $("tab-" + tabId);
+  if (target) target.classList.remove("hidden");
+
+  const titles = {
+    "search": "Legal Search & Scraper",
+    "research": "Research Pipeline",
+    "petition": "Petition Analyzer",
+    "projects": "Projects & Case Books"
+  };
+  $("current-tab-title").textContent = titles[tabId] || "Legal Citation Intelligence";
+
+  if (window.innerWidth <= 768) {
+    $("app-sidebar").classList.remove("open");
+  }
+
+  if (tabId === "projects") {
+    loadProjects();
+  }
+}
+
+// ── Check LLM Status ──
+(async () => {
+  try {
+    const m = await api("/api/v1/models");
+    const el = $("status");
+    if (m.llm_enabled && m.models.length) {
+      el.textContent = "LLM: " + (m.active_model || m.models[0]);
+      el.classList.add("on");
+    } else {
+      el.textContent = m.note || "LLM offline";
+      el.title = m.error || "";
+    }
+  } catch (e) {
+    $("status").textContent = "API offline";
+  }
+  loadProjectsDropdown();
+})();
+
+// ── Legal Search Switcher & Actions ──
+function setSearchMode(mode) {
+  if (mode === 'text') {
+    $("search-mode-text").classList.add("active");
+    $("search-mode-doc").classList.remove("active");
+    $("search-mode-text-container").classList.remove("hidden");
+    $("search-mode-doc-container").classList.add("hidden");
+  } else {
+    $("search-mode-doc").classList.add("active");
+    $("search-mode-text").classList.remove("active");
+    $("search-mode-doc-container").classList.remove("hidden");
+    $("search-mode-text-container").classList.add("hidden");
+  }
+}
+
+function renderCitationCard(r) {
+  const rJson = encodeURIComponent(JSON.stringify(r));
+  return `
+    <div class="result-item">
+      <div class="result-item-header">
+        <h3><span class="badge b-purple">🌐 Live Authority</span> ${esc(r.case_name)}</h3>
+        <button class="save-to-project-btn" onclick="openSaveModal('${rJson}')">🔖 Save to Project</button>
+      </div>
+      <p>${esc(r.text || r.holding || "")}</p>
+      <div class="tagline">
+        <span>🏛️ ${esc(r.court || "Indian Courts")}</span>
+        ${r.year ? `<span>📅 ${r.year}</span>` : ""}
+        ${r.citation ? `<span>📜 ${esc(r.citation)}</span>` : ""}
+        ${r.matched_query ? `<span class="badge b-yellow">Trigger: ${esc(r.matched_query)}</span>` : ""}
+        ${r.url ? `<a href="${esc(r.url)}" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none;margin-left:auto;">🔗 View Judgment on IndianKanoon ↗</a>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+async function doSearch() {
+  const q = $("search-q").value.trim();
+  if (!q) return;
+  $("search-results").innerHTML = '<div class="card muted"><span class="spinner"></span>Searching live Indian legal judgments &amp; citations…</div>';
+  try {
+    const d = await api(`/api/v1/search?q=${encodeURIComponent(q)}&k=15`);
+    if (!d.results.length) {
+      $("search-results").innerHTML = '<div class="card muted">No results found online for this query.</div>';
+      return;
+    }
+    $("search-results").innerHTML = `
+      <div style="font-size:12.5px;color:var(--muted-foreground);margin-bottom:12px;">${d.count} live authorities retrieved for “${esc(q)}”</div>
+      ${d.results.map(r => renderCitationCard(r)).join("")}
+    `;
+  } catch (e) {
+    $("search-results").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  }
+}
+
+async function doDocumentSearch() {
+  const btn = $("search-doc-btn");
+  const file = $("search-doc-file").files[0];
+  const pastedText = $("search-doc-text").value.trim();
+  if (!file && pastedText.length < 20) {
+    $("search-results").innerHTML = '<div class="warn">Please upload a document file (.pdf, .txt) or paste at least 20 characters of legal text.</div>';
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>AI Analyzing &amp; Scraping…';
+  $("search-results").innerHTML = '<div class="card muted"><span class="spinner"></span>Analyzing document with AI → extracting legal issues &amp; statutes → scraping live judgments and citations…</div>';
+  try {
+    let data;
+    if (file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/v1/search/document?k=15", { method: "POST", body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({ detail: r.statusText }))).detail);
+      data = await r.json();
+    } else {
+      data = await api("/api/v1/search/document?k=15", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: pastedText }) });
+    }
+
+    const issuesHtml = (data.legal_issues || []).map(i => `<span class="badge b-yellow" style="margin:2px">⚖️ ${esc(i)}</span>`).join(" ");
+    const statutesHtml = (data.statutes_involved || []).map(s => `<span class="badge b-green" style="margin:2px">📜 ${esc(s)}</span>`).join(" ");
+    const citesHtml = (data.extracted_citations || []).map(c => `<span class="badge b-purple" style="margin:2px">🔖 ${esc(c)}</span>`).join(" ");
+    const queriesHtml = (data.search_queries || []).map(q => `<span class="badge" style="margin:2px;border-color:rgba(59,130,246,0.3);color:var(--accent)">🔍 ${esc(q)}</span>`).join(" ");
+
+    const summaryBlock = `
+      <div class="card" style="border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.03);">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <h3 class="card-title">📋 AI Document Intelligence Summary</h3>
+          <span class="badge b-purple">${esc(data.document_type || "Legal Document")}</span>
+        </div>
+        <p style="margin:8px 0;line-height:1.6;color:var(--foreground)">${esc(data.summary || "")}</p>
+        ${issuesHtml ? `<div style="margin-top:10px"><div class="muted" style="font-size:11px;font-weight:600;text-transform:uppercase;margin-bottom:4px">Identified Legal Issues</div><div>${issuesHtml}</div></div>` : ""}
+        ${statutesHtml ? `<div style="margin-top:10px"><div class="muted" style="font-size:11px;font-weight:600;text-transform:uppercase;margin-bottom:4px">Relevant Statutory Provisions</div><div>${statutesHtml}</div></div>` : ""}
+        ${citesHtml ? `<div style="margin-top:10px"><div class="muted" style="font-size:11px;font-weight:600;text-transform:uppercase;margin-bottom:4px">Citations in Document</div><div>${citesHtml}</div></div>` : ""}
+        ${queriesHtml ? `<div style="margin-top:10px"><div class="muted" style="font-size:11px;font-weight:600;text-transform:uppercase;margin-bottom:4px">AI-Formulated Live Scraper Queries</div><div>${queriesHtml}</div></div>` : ""}
+      </div>
+    `;
+
+    if (!data.results || !data.results.length) {
+      $("search-results").innerHTML = summaryBlock + '<div class="card muted">No matching live authorities found for the extracted queries.</div>';
+      return;
+    }
+
+    const resultsList = data.results.map(r => renderCitationCard(r)).join("");
+    $("search-results").innerHTML = summaryBlock + `<div style="font-size:12.5px;color:var(--muted-foreground);margin-bottom:12px;">${data.results.length} live authorities found for this document</div>` + resultsList;
+  } catch (e) {
+    $("search-results").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '⚡ AI Analyze &amp; Scrape Citations';
+  }
+}
+
+// ── Research Pipeline Action ──
+async function doResearch() {
+  const q = $("research-q").value.trim();
+  if (!q) return;
+  const btn = $("research-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Working…';
+  $("research-out").innerHTML = '<div class="card muted"><span class="spinner"></span>Agents running: issue decomposition → retrieval → verification → memo. This can take up to a minute.</div>';
+  try {
+    const r = await api("/api/v1/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+    const warns = (r.warnings || []).map(w => `<div class="warn">⚠️ ${esc(w)}</div>`).join("");
+    const authRows = list => (list || []).map(a => renderCitationCard(a)).join("") || '<p class="muted">None.</p>';
+
+    $("research-out").innerHTML = `
+      ${warns}
+      <div class="card"><div class="memo">${md(r.research_summary || "")}</div></div>
+      ${r.issues && r.issues.main_issue ? `<div class="card"><h3 class="card-title">Issue Decomposition</h3><p style="margin:6px 0"><strong>${esc(r.issues.main_issue)}</strong></p>${(r.issues.issues || []).map(i => `<p style="margin:4px 0">• <strong>${esc(i.title)}</strong> <span class="muted">(${esc(i.area || "")})</span><br/><span class="muted" style="font-size:12px">${esc((i.sub_issues || []).join(" · "))}</span></p>`).join("")}</div>` : ""}
+      <div class="card"><h3 class="card-title">Supporting Authorities</h3>${authRows(r.authorities)}</div>
+      <div class="card"><h3 class="card-title">Contrary Authorities</h3>${authRows(r.contrary_authorities)}</div>
+      ${(r.statutes || []).length ? `<div class="card"><h3 class="card-title">Applicable Statutes</h3>${r.statutes.map(s => `<p>📜 <strong>${esc(s.act)} ${esc(s.section || "")}</strong> — ${esc(s.relevance || s.title || "")}</p>`).join("")}</div>` : ""}
+    `;
+  } catch (e) {
+    $("research-out").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run Research Agents";
+  }
+}
+
+// ── Petition Analyzer Action ──
+async function analyzePetition() {
+  const btn = $("petition-btn");
+  const file = $("petition-file").files[0];
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Analyzing…';
+  $("petition-out").innerHTML = '<div class="card muted"><span class="spinner"></span>Extracting facts, verifying citations, running precedent analysis…</div>';
+  try {
+    let resp;
+    if (file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/v1/petitions/analyze", { method: "POST", body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({ detail: r.statusText }))).detail);
+      resp = await r.json();
+    } else {
+      const t = $("petition-text").value.trim();
+      if (t.length < 30) throw new Error("Upload a file or paste at least 30 characters of petition text.");
+      resp = await api("/api/v1/petitions/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t }) });
+    }
+
+    const vRows = (resp.verified_citations || []).map(v => {
+      const b = BADGE[v.status] || ["b-yellow", v.status];
+      return `<tr><td>${esc(v.input)}</td><td>${esc(v.matched_case ? v.matched_case.case_name : "—")}</td><td><span class="badge ${b[0]}">${b[1]}</span></td><td>${v.confidence}%</td></tr>`;
+    }).join("");
+
+    $("petition-out").innerHTML = `
+      ${(resp.warnings || []).map(w => `<div class="warn">⚠️ ${esc(w)}</div>`).join("")}
+      <div class="card"><div class="memo">${md(resp.research_report || "")}</div></div>
+      <div class="card">
+        <h3 class="card-title">Citation Verification Detail</h3>
+        ${vRows ? `<table style="margin-top:10px;width:100%"><thead><tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--muted-foreground)"><th>Cited as</th><th>Matched case</th><th>Status</th><th>Confidence</th></tr></thead><tbody>${vRows}</tbody></table>` : '<p class="muted">No citations found in document.</p>'}
+      </div>
+    `;
+  } catch (e) {
+    $("petition-out").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Analyze Petition";
+  }
+}
+
+// ── Projects Feature & Modals ──
+async function loadProjects() {
+  const container = $("projects-grid");
+  container.innerHTML = '<div class="card muted"><span class="spinner"></span>Loading projects…</div>';
+  try {
+    const data = await api("/api/v1/projects");
+    window._projectsCache = data.projects || [];
+    if (!window._projectsCache.length) {
+      container.innerHTML = `
+        <div class="card" style="grid-column: 1/-1;text-align:center;padding:36px;">
+          <p style="font-size:16px;font-weight:600;margin-bottom:6px">No Projects Created Yet</p>
+          <p class="muted" style="margin-bottom:16px">Create a project to organize citations from search and research sessions.</p>
+          <button class="btn-primary" onclick="openNewProjectModal()">➕ Create First Project</button>
+        </div>
+      `;
+      return;
+    }
+    container.innerHTML = window._projectsCache.map(p => `
+      <div class="project-card" onclick="openProjectDetail('${p.project_id}')">
+        <h4>📁 ${esc(p.name)}</h4>
+        <p>${esc(p.description || "No description provided.")}</p>
+        <div class="project-card-footer">
+          <span class="badge b-blue">${p.citations_count || 0} citations</span>
+          <span>${new Date(p.created_at).toLocaleDateString()}</span>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    container.innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  }
+}
+
+async function loadProjectsDropdown() {
+  try {
+    const data = await api("/api/v1/projects");
+    window._projectsCache = data.projects || [];
+    const sel = $("save-project-select");
+    if (!window._projectsCache.length) {
+      sel.innerHTML = '<option value="">No projects available (Create one below)</option>';
+    } else {
+      sel.innerHTML = window._projectsCache.map(p => `<option value="${p.project_id}">${esc(p.name)} (${p.citations_count || 0} cites)</option>`).join("");
+    }
+  } catch (e) {}
+}
+
+function openSaveModal(citationDataStr) {
+  try {
+    const r = JSON.parse(decodeURIComponent(citationDataStr));
+    window._currentPendingCitation = r;
+    $("save-case-title").textContent = r.case_name || "Untitled Case";
+    $("save-case-cite").textContent = `${r.court || "Indian Court"} · ${r.year || ""} · ${r.citation || ""}`;
+    $("save-citation-notes").value = "";
+    loadProjectsDropdown();
+    $("save-modal").style.display = "flex";
+  } catch (e) {
+    alert("Could not prepare citation: " + e.message);
+  }
+}
+
+function closeSaveModal() {
+  $("save-modal").style.display = "none";
+  window._currentPendingCitation = null;
+}
+
+async function confirmSaveCitation() {
+  const projId = $("save-project-select").value;
+  if (!projId) {
+    alert("Please select a project or create a new one.");
+    return;
+  }
+  if (!window._currentPendingCitation) return;
+
+  const payload = {
+    case_name: window._currentPendingCitation.case_name || "Untitled",
+    citation: window._currentPendingCitation.citation || window._currentPendingCitation.reported_citation || "",
+    court: window._currentPendingCitation.court || "",
+    year: window._currentPendingCitation.year ? parseInt(window._currentPendingCitation.year) : null,
+    holding: window._currentPendingCitation.holding || window._currentPendingCitation.text || "",
+    url: window._currentPendingCitation.url || "",
+    notes: $("save-citation-notes").value.trim()
+  };
+
+  try {
+    const res = await api(`/api/v1/projects/${projId}/citations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    closeSaveModal();
+    if (res.already_exists) {
+      showToast("ℹ️ Already saved in this project!");
+    } else {
+      showToast("✓ Citation saved to project!");
+    }
+  } catch (e) {
+    alert("Failed to save citation: " + e.message);
+  }
+}
+
+function openNewProjectModal() {
+  $("new-proj-name").value = "";
+  $("new-proj-desc").value = "";
+  $("new-project-modal").style.display = "flex";
+}
+
+function closeNewProjectModal() {
+  $("new-project-modal").style.display = "none";
+}
+
+async function submitCreateProject() {
+  const name = $("new-proj-name").value.trim();
+  const desc = $("new-proj-desc").value.trim();
+  if (!name) {
+    alert("Please enter a project name.");
+    return;
+  }
+  try {
+    const p = await api("/api/v1/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description: desc })
+    });
+    closeNewProjectModal();
+    showToast("✓ Project created!");
+    loadProjects();
+    loadProjectsDropdown();
+    if (window._currentPendingCitation) {
+      setTimeout(() => {
+        $("save-project-select").value = p.project_id;
+      }, 200);
+    }
+  } catch (e) {
+    alert("Failed to create project: " + e.message);
+  }
+}
+
+async function openProjectDetail(projId) {
+  window._activeProjectId = projId;
+  $("projects-grid-container").classList.add("hidden");
+  const detail = $("project-detail-container");
+  detail.classList.remove("hidden");
+  $("proj-citations-list").innerHTML = '<div class="muted"><span class="spinner"></span>Loading project citations…</div>';
+
+  try {
+    const p = await api(`/api/v1/projects/${projId}`);
+    $("proj-detail-name").textContent = p.name;
+    $("proj-detail-desc").textContent = p.description || "No description provided.";
+    window._activeProjectData = p;
+
+    if (!p.citations || !p.citations.length) {
+      $("proj-citations-list").innerHTML = '<div class="card muted" style="text-align:center;padding:24px;">No citations saved in this project yet. Use "Save to Project" from any search or research results.</div>';
+      return;
+    }
+
+    $("proj-citations-list").innerHTML = p.citations.map(c => `
+      <div class="result-item" id="cite-item-${c.item_id}">
+        <div class="result-item-header">
+          <h3>${esc(c.case_name)}</h3>
+          <button class="btn-destructive" onclick="removeCitationFromProject('${c.item_id}')">Remove</button>
+        </div>
+        <p>${esc(c.holding || "")}</p>
+        ${c.notes ? `<div class="warn" style="margin:8px 0;font-size:12.5px;"><strong>Note:</strong> ${esc(c.notes)}</div>` : ""}
+        <div class="tagline">
+          <span>🏛️ ${esc(c.court || "Indian Court")}</span>
+          ${c.year ? `<span>📅 ${c.year}</span>` : ""}
+          ${c.citation ? `<span>📜 ${esc(c.citation)}</span>` : ""}
+          ${c.url ? `<a href="${esc(c.url)}" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none;margin-left:auto;">🔗 View Judgment ↗</a>` : ""}
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    $("proj-citations-list").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+  }
+}
+
+function closeProjectDetail() {
+  $("project-detail-container").classList.add("hidden");
+  $("projects-grid-container").classList.remove("hidden");
+  window._activeProjectId = null;
+  loadProjects();
+}
+
+async function removeCitationFromProject(itemId) {
+  if (!confirm("Remove this citation from the project?")) return;
+  try {
+    await api(`/api/v1/projects/${window._activeProjectId}/citations/${itemId}`, { method: "DELETE" });
+    const el = document.getElementById(`cite-item-${itemId}`);
+    if (el) el.remove();
+    showToast("Citation removed");
+  } catch (e) {
+    alert("Failed to remove citation: " + e.message);
+  }
+}
+
+async function deleteCurrentProject() {
+  if (!confirm("Are you sure you want to delete this entire project and its saved citations?")) return;
+  try {
+    await api(`/api/v1/projects/${window._activeProjectId}`, { method: "DELETE" });
+    showToast("Project deleted");
+    closeProjectDetail();
+  } catch (e) {
+    alert("Failed to delete project: " + e.message);
+  }
+}
+
+function copyProjectCitations() {
+  if (!window._activeProjectData || !window._activeProjectData.citations) return;
+  const lines = window._activeProjectData.citations.map((c, i) => {
+    return `${i + 1}. ${c.case_name} ${c.citation ? `(${c.citation})` : ''} - ${c.court || ''} ${c.year || ''}\n   Holding/Ratio: ${c.holding || ''}\n   Link: ${c.url || ''}`;
+  }).join("\n\n");
+  navigator.clipboard.writeText(lines).then(() => {
+    showToast("✓ Copied all citations to clipboard!");
+  }).catch(() => {
+    alert("Could not copy to clipboard");
+  });
+}
+</script>
+</body>
+</html>

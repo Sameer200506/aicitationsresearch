@@ -1,0 +1,313 @@
+import asyncio
+import re
+from typing import Any
+
+import httpx
+from bs4 import BeautifulSoup, Tag
+
+from ..citations.parser import extract_citation_strings, parse_citations
+
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+SEARCH_TIMEOUT = 10.0
+_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def _infer_court_and_year(title: str, text: str) -> tuple[str, int | None]:
+    combined = f"{title} {text}"
+    year_m = re.search(r"\b(19\d\d|20\d\d)\b", combined)
+    year = int(year_m.group(1)) if year_m else None
+
+    clow = combined.lower()
+    if "supreme court" in clow or "sc " in clow or "scc" in clow:
+        court = "Supreme Court of India"
+    elif "delhi high court" in clow or "delhi hc" in clow:
+        court = "Delhi High Court"
+    elif "telangana high court" in clow or "telangana hc" in clow or "andhra pradesh" in clow:
+        court = "Telangana High Court"
+    elif "bombay high court" in clow or "bombay hc" in clow:
+        court = "Bombay High Court"
+    elif "calcutta high court" in clow or "calcutta hc" in clow:
+        court = "Calcutta High Court"
+    elif "madras high court" in clow or "madras hc" in clow:
+        court = "Madras High Court"
+    elif "high court" in clow:
+        court = "High Court"
+    elif "tribunal" in clow or "nclat" in clow or "nclt" in clow:
+        court = "Tribunal"
+    else:
+        court = "Indian Courts"
+    return court, year
+
+
+def decompose_query(query: str) -> list[str]:
+    subqueries: list[str] = []
+    q_clean = query.strip()
+    if not q_clean:
+        return []
+
+    # 1. Full raw query if reasonably concise
+    words_all = q_clean.split()
+    if len(words_all) <= 8:
+        subqueries.append(q_clean)
+
+    # 2. Extract case names (e.g. Party v. Party / Party vs Party)
+    for m in re.finditer(r'([A-Z0-9][A-Za-z0-9\.\s\-\'\\\&]+?\s+(?:v\.|vs\.?|versus)\s+[A-Z0-9][A-Za-z0-9\.\s\-\'\\\&]+?)(?:,|$|—|\n|\()', q_clean, re.IGNORECASE):
+        cname = m.group(1).strip()
+        if len(cname.split()) >= 2 and len(cname) < 90:
+            subqueries.append(cname)
+
+    # 3. Extract formal citations (e.g. 2025 INSC 462, (1998) 8 SCC 1, AIR 1950 SC 124)
+    parsed = parse_citations(q_clean)
+    for p in parsed:
+        if p.canonical:
+            subqueries.append(p.canonical)
+
+    # 4. Extract Appeal / Writ Petition / SLP numbers (e.g. Civil Appeal No. 3954 of 2025, W.P. No. 33955 of 2021)
+    for m in re.finditer(r'((?:Civil Appeal|Criminal Appeal|W\.?P\.?|Writ Petition|S\.?L\.?P\.?|Special Leave Petition|C\.?A\.?)\s*(?:\([A-Za-z]+\))?\s*No\.?\s*\d+\s*(?:of|/)\s*\d+)', q_clean, re.IGNORECASE):
+        subqueries.append(m.group(1).strip())
+
+    # 5. Extract Section / Act provisions
+    for m in re.finditer(r'((?:Section|Sec\.|Article|Art\.|Rule|Order)\s*\d+[A-Za-z0-9\(\)]*(?:\s+[A-Za-z]+){0,4}(?:\s+Act|\s+Rules|\s+Code|\s+CrPC|\s+IPC|\s+CPC|\s+BNSS|\s+BNS)?)', q_clean, re.IGNORECASE):
+        subqueries.append(m.group(1).strip())
+
+    # 6. Split by clauses (em-dash, hyphen, semicolon)
+    for part in re.split(r'[—–;]', q_clean):
+        part_clean = re.sub(r'^(?:whether|regarding|effect of|issue of|challenging)\s+', '', part.strip(), flags=re.IGNORECASE).strip()
+        words = [w for w in re.findall(r'[A-Za-z0-9]{3,}', part_clean) if w.lower() not in {"the", "and", "for", "with", "from", "that", "this", "can", "may"}]
+        if 2 <= len(words) <= 7:
+            subqueries.append(" ".join(words))
+
+    # 7. Fallback keywords
+    stop_words = {"the", "and", "for", "with", "from", "that", "this", "can", "may", "whether", "refusal", "effect", "decided", "under", "because"}
+    key_words = [w for w in re.findall(r'[A-Za-z0-9]{3,}', q_clean) if w.lower() not in stop_words]
+    if len(key_words) >= 3:
+        subqueries.append(" ".join(key_words[:6]))
+
+    # Deduplicate preserving order
+    seen = set()
+    final: list[str] = []
+    for sq in subqueries:
+        norm = re.sub(r'\s+', ' ', sq).strip()
+        if norm and norm.lower() not in seen and len(norm) > 2:
+            seen.add(norm.lower())
+            final.append(norm)
+
+    return final or [q_clean]
+
+
+def _extract_doc_id(href: str) -> str | None:
+    """Extract numeric document ID from an IndianKanoon href."""
+    m = re.search(r'/(?:docfragment|doc)/(\d+)/', href)
+    return m.group(1) if m else None
+
+
+async def fetch_kanoon_page(query: str, top_k: int = 8) -> list[dict[str, Any]]:
+    """Scrape IndianKanoon search results using BeautifulSoup."""
+    # ponytail: uses html.parser (stdlib) to avoid lxml dependency
+    results: list[dict[str, Any]] = []
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"}
+    try:
+        async with httpx.AsyncClient(timeout=SEARCH_TIMEOUT, follow_redirects=True) as client:
+            r = await client.get(
+                "https://indiankanoon.org/search/",
+                params={"formInput": query},
+                headers=headers,
+            )
+            if r.status_code != 200:
+                return results
+
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        for block in soup.select(".result")[:top_k]:
+            # Title + link
+            title_el = block.select_one(".result_title a")
+            if not title_el:
+                continue
+            title = title_el.get_text(separator=" ", strip=True)
+            href = title_el.get("href", "")
+
+            doc_id = _extract_doc_id(str(href))
+            clean_url = (
+                f"https://indiankanoon.org/doc/{doc_id}/"
+                if doc_id
+                else f"https://indiankanoon.org{href}"
+            )
+
+            # Snippet
+            headline_el = block.select_one(".headline")
+            snippet = headline_el.get_text(separator=" ", strip=True) if headline_el else ""
+
+            # Court source
+            source_el = block.select_one(".docsource")
+            docsource = source_el.get_text(strip=True) if source_el else ""
+
+            court, year = _infer_court_and_year(title, f"{docsource} {snippet}")
+            if docsource:
+                court = docsource
+
+            cites = extract_citation_strings(f"{title} {snippet}")
+            short_name = title.split(" vs ")[0].split(" v. ")[0].split(" on ")[0].strip()
+
+            results.append({
+                "type": "online",
+                "source_name": "IndianKanoon Live",
+                "case_name": title,
+                "short_name": short_name or title,
+                "court": court,
+                "year": year,
+                "reported_citation": cites[0] if cites else None,
+                "citation": cites[0] if cites else None,
+                "text": snippet or title,
+                "url": clean_url,
+                "citations": cites,
+            })
+    except Exception:
+        pass
+    return results
+
+
+async def search_online(query: str, top_k: int = 12) -> list[dict[str, Any]]:
+    q_clean = query.strip()
+    if not q_clean:
+        return []
+    if q_clean in _CACHE:
+        return _CACHE[q_clean][:top_k]
+
+    subqueries = decompose_query(q_clean)
+    tasks = [fetch_kanoon_page(sq, top_k=top_k) for sq in subqueries[:5]]
+    nested_res = await asyncio.gather(*tasks, return_exceptions=True)
+
+    merged: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+
+    for item_list in nested_res:
+        if not isinstance(item_list, list):
+            continue
+        for item in item_list:
+            url = item.get("url", "")
+            title_key = re.sub(r"[^a-zA-Z0-9]", "", item.get("case_name", "").lower())[:40]
+            if (url and url in seen_urls) or (title_key and title_key in seen_titles):
+                continue
+            if url:
+                seen_urls.add(url)
+            if title_key:
+                seen_titles.add(title_key)
+            item["final_score"] = round(1.8 - (len(merged) * 0.04), 4)
+            merged.append(item)
+
+    _CACHE[q_clean] = merged
+    return merged[:top_k]
+
+
+async def analyze_document_and_search(text: str, llm=None, top_k: int = 15) -> dict[str, Any]:
+    """Analyze a legal document with AI/heuristics, extract core issues/statutes/citations, and scrape live authorities."""
+    text_clean = text.strip()
+    if not text_clean:
+        return {
+            "document_type": "Unknown",
+            "summary": "Empty document provided.",
+            "legal_issues": [],
+            "statutes_involved": [],
+            "extracted_citations": [],
+            "search_queries": [],
+            "count": 0,
+            "results": [],
+        }
+
+    extracted_cites = extract_citation_strings(text_clean[:25000])
+
+    analysis = {
+        "document_type": "Legal Document",
+        "summary": text_clean[:220] + ("..." if len(text_clean) > 220 else ""),
+        "legal_issues": [],
+        "statutes_involved": [],
+        "search_queries": [],
+    }
+
+    if llm and llm.available():
+        system = """You are an Indian Legal Research Intelligence Agent.
+Analyze the uploaded legal document (e.g. petition, deed, contract, application, FIR, order, or notice) and formulate the best search queries to retrieve binding Supreme Court, High Court, and Tribunal citations and precedents on IndianKanoon.
+
+Respond ONLY with JSON:
+{
+  "document_type": "Precise document category (e.g. Gift Deed Dispute, Quashing Petition under S. 482 CrPC, Bail Application, Commercial Suit, etc.)",
+  "summary": "Concise 2-3 sentence overview of the key facts, dispute, and relief sought",
+  "legal_issues": ["Issue 1: concise question of law", "Issue 2: ..."],
+  "statutes_involved": ["Act & Section (e.g. Section 126 Transfer of Property Act)"],
+  "search_queries": [
+    "precise search query 1 for Indian judgments (e.g. 'cancellation of gift deed fraud undue influence')",
+    "precise search query 2 (e.g. 'Section 126 Transfer of Property Act revocation conditions')",
+    "precise search query 3",
+    "precise search query 4",
+    "precise search query 5"
+  ]
+}"""
+        prompt = f"Document Text:\n\n{text_clean[:25000]}"
+        try:
+            ai_data = await llm.json_chat(system, prompt, temperature=0.1)
+            if isinstance(ai_data, dict):
+                if ai_data.get("document_type"):
+                    analysis["document_type"] = ai_data["document_type"]
+                if ai_data.get("summary"):
+                    analysis["summary"] = ai_data["summary"]
+                if isinstance(ai_data.get("legal_issues"), list):
+                    analysis["legal_issues"] = [str(i) for i in ai_data["legal_issues"] if i]
+                if isinstance(ai_data.get("statutes_involved"), list):
+                    analysis["statutes_involved"] = [str(s) for s in ai_data["statutes_involved"] if s]
+                if isinstance(ai_data.get("search_queries"), list):
+                    analysis["search_queries"] = [str(q).strip() for q in ai_data["search_queries"] if q]
+        except Exception:
+            pass
+
+    # Deterministic fallback / supplemental queries
+    if not analysis["search_queries"]:
+        decomposed = decompose_query(text_clean[:4000])
+        analysis["search_queries"] = decomposed[:6]
+
+    # Include formal citations found inside the document as queries too
+    combined_queries = list(analysis["search_queries"])
+    for cite in extracted_cites[:4]:
+        if cite not in combined_queries:
+            combined_queries.append(cite)
+
+    # Scrape live authorities for each query in parallel
+    tasks = [fetch_kanoon_page(q, top_k=6) for q in combined_queries[:5] if q]
+    results_nested = await asyncio.gather(*tasks, return_exceptions=True)
+
+    merged: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+
+    for idx, item_list in enumerate(results_nested):
+        if not isinstance(item_list, list):
+            continue
+        trigger_query = combined_queries[idx] if idx < len(combined_queries) else ""
+        for item in item_list:
+            url = item.get("url", "")
+            title_key = re.sub(r"[^a-zA-Z0-9]", "", item.get("case_name", "").lower())[:40]
+            if (url and url in seen_urls) or (title_key and title_key in seen_titles):
+                continue
+            if url:
+                seen_urls.add(url)
+            if title_key:
+                seen_titles.add(title_key)
+            item_copy = dict(item)
+            item_copy["matched_query"] = trigger_query
+            merged.append(item_copy)
+
+    # Sort and score
+    for rank, item in enumerate(merged):
+        item["score"] = round(2.0 - (rank * 0.03), 3)
+
+    return {
+        "document_type": analysis["document_type"],
+        "summary": analysis["summary"],
+        "legal_issues": analysis["legal_issues"],
+        "statutes_involved": analysis["statutes_involved"],
+        "extracted_citations": extracted_cites,
+        "search_queries": analysis["search_queries"],
+        "count": len(merged[:top_k]),
+        "results": merged[:top_k],
+    }
+
